@@ -1,0 +1,237 @@
+---
+title: "Congress Report"
+author: "Pooja Shree Ramanathan"
+date: "April 28th, 2018"
+output: html_document
+---
+
+```{r setup, results='asis', include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Loading all the required libraries
+library("httr")
+library("jsonlite")
+library("dplyr")
+library("markdown")
+library("knitr")
+library("ggplot2")
+
+# sourcing Access key
+source("api_key.R")
+
+# topic for the recent 10 bills
+resource_uri <- "/bills/search.json?query=immigration"
+
+# Representative ID
+representative_id <- "S000510"
+```
+
+## Introduction ##
+
+##### This is a report on the laws that are being created by the **United States Congress**. It includes what the legislators in Congress, the people we voted for, have been doing with the power we have given them. It ellaborates on certain bills the **US government** passes and where more information on similar bills and laws could be found. This report is divided into three divisions as follows: 
+\newline
+<p> 1. Legislative Data - Informatioin on congressional laws (bills) that have recently been introduced </p>
+<p> 2. Specific Legislation - Provides an explanation on a specific bill on a chosen topic of legislation </p>
+<p> 3. Representative Actions - Information about the actions taken by a specific legislator the represents the place I live </p>
+
+\newline \newline
+
+### Section 1: Legislative Data 
+
+\newline \newline
+
+__10 Most recent bills related to Immigration:__
+
+\newline \newline
+
+```{r, echo=FALSE, include=TRUE}
+# base URI
+base_uri <- "https://api.propublica.org/congress/v1"
+
+# A function that receives the resource uri and returns the parsed data
+parse_the_data <- function(resource_uri) {
+  get_uri <- GET(paste0(base_uri,resource_uri), add_headers('X-API-Key' = api_key))
+  parsed_data <- content(get_uri, "text") %>%
+    fromJSON()
+  parsed_data
+}
+
+# Bills data
+
+# Call for the function that takes the resource uri and parses the data
+# and returns the content body
+parsed_data <- parse_the_data(resource_uri)
+
+# Selects the required data frame from deeper level
+bills_data <- parsed_data$results$bills
+
+# Flattening the data and arranging them from most recent bills on top
+bills_all <- flatten(data.frame(bills_data)) %>%
+  arrange(desc(introduced_date))
+
+# Creating a new column with 'Sponsor name, Sponsor party, Sponsor State'
+# for the bills
+bills_all <- mutate(bills_all, legislation_info = paste(bills_all$sponsor_name, bills_all$sponsor_party, bills_all$sponsor_state, sep = ", "))
+
+# Filtering out the data with only the required columns and informations
+bills_data_frame <- select(bills_all, 4, 6, 35, 31, 32, 16)
+
+values <- c("Bill ID","Name","Legislator Info", "Latest action date", "Status", "More Info")
+
+names(bills_data_frame) <- values
+
+# Filtering out the most recent 10 bills
+bills_data_frame <- head(bills_data_frame, 10)
+
+kable(bills_data_frame, format = "markdown")
+```
+
+### \newline \newline
+
+1. **Bill ID : ** This column is a unique identifier for each of the bills. The bills begin as *H.R.* and a number depending on the order in which they were introduced.
+
+2. **Name : ** This column is the name of the bill.
+
+3. **Legislator Info : ** This column consists of information regarding which political representative is involved with the bill. The legislator’s state and party tells you which state and party they represent. The letter R or D after the name represents which party they represent, the Republican’s or Democrats. The two letters after reprents the state they are representing.
+
+4. **Latest Action Date : ** This column tells us the date when this bill was last modified.
+
+5. **Status : ** This column consists the bill’s current status in the legislative branch. It explains both the House’s and the Senate’s reactions to it, and how far it is from being passed. This column also includes the IDs of any texts of measures
+
+6. **More Info : ** This column includes the links to where the full script of the bill can be accessed, as well as additional information about it. The links take you to a government tracking website, updating constituents on the bills their representatives are interacting with.
+
+\newline \newline \newline 
+
+### Section 2: Specific Legislation
+
+### \newline \newline \newline
+
+```{r, echo=FALSE}
+# One selected bill based on the bill that has maximum cosponsors
+one_bill <- filter(bills_all, bills_all$cosponsors == max(bills_all$cosponsors))
+
+# Pasting the uri
+related_uri <- paste0("/115/bills/", one_bill$bill_slug, ".json")
+
+# Calling the function to extract and pass the data content
+related_response <- parse_the_data(related_uri)
+
+related_data <- related_response$results
+
+# Filtering out the important information
+chosen_bill <- select_(related_data, 'number', 'title', 'introduced_date', 'sponsor', 'sponsor_party', 'sponsor_state', 'latest_major_action_date', 'latest_major_action', 'govtrack_url')
+
+chosen_bill <- mutate(chosen_bill, legislation_info = paste(chosen_bill$sponsor, chosen_bill$sponsor_party, chosen_bill$sponsor_state, sep = ", "))
+
+chosen_bill <- select(chosen_bill, 'number', 'title', 'introduced_date', 'legislation_info','latest_major_action_date', 'latest_major_action', 'govtrack_url')
+
+kable(chosen_bill, format = "markdown")
+```
+
+
+1. **number : ** This column is a unique identifier for each of the bills. The bills begin as *H.R.* and a number depending on the order in which they were introduced.
+
+2. **title : ** This column is the name of the bill.
+
+3. **Introduced date : ** The date this bill was initiated.
+
+4. **Legislator Info : ** This column consists of information regarding which political representative is involved with the bill. The legislator’s state and party tells you which state and party they represent. The letter R or D after the name represents which party they represent, the Republican’s or Democrats. The two letters after reprents the state they are representing.
+
+5. **Latest Action Date : ** This column tells us the date when this bill was last modified.
+
+6. **Latest Major Action : ** This column consists the bill’s current status in the legislative branch. It explains both the House’s and the Senate’s reactions to it, and how far it is from being passed. This column also includes the IDs of any texts of measures
+
+7. **govtrack url : ** This column includes the links to where the full script of the bill can be accessed, as well as additional information about it. The links take you to a government tracking website, updating constituents on the bills their representatives are interacting with.
+
+
+### \newline \newline \newline
+
+
+The purpose of this bill is to control serious human rights abuses of the Government of Iran. The Iranian regime persecutes ethnic and religious minority groups, such as the Baha’is, Christians, Sufi, Sunni, and dissenting Shi’a Muslims (such as imprisoned Ayatollah Hossein Kazemeyni Boroujerdi), through harassment, arrests, and imprisonment, during which detainees have routinely been beaten, tortured, and killed. Iran has violated the  International Covenant on Civil and Political Rights, and other human right traties and international obligations.
+
+This bill senses that Congress of the United States should deny the Government of Iran the ability to continue to oppress the people of Iran and to use violence and executions to silence pro-democracy protestors. Work with other countries to investigate the human rights violations committed by the Iran officials. It also requires the Unites States to support the people of Iran to establish basic freedom and build foundations for a freely elected, non-corrupt,and open democratic political system.
+
+To achieve the above goals it requires the president to determine whether senior Iranian officials are responsible for human rights abuses and whether official Iranian businesses should be sanctioned for public corruption under existing law. It also imposes blocking of property and denial of visa sanctions to the United States for Iranian Officials and family members responsible for politically motivated detentions of U.S. citizens and residents, or abuses against Iranian expatriates.
+
+
+
+##### This bill should be encouraged to voted for and passed into law because the Iranian regime continues to perpetuate so many innocent lives. They suppress the country's voice by censoring the media and continue their illegal and corrupt practices. In terms of American interest, they have 5 Americans currently held hostages. By enacting this bill, this unhuman and cruel regime will be put to an end by the United States and other countries.
+
+
+##### Results of this bill:
+##### The bill was referred to the Committee on Foreign Affairs, and in addition to the Committees on the Judiciary, Financial Services, and Ways and Means, for a period to be subsequently determined by the Speaker, in each case for consideration of such provisions as fall within the jurisdiction of the committee concerned. This bill was successfully passed with 410 yes, 2 no and 16 no votes on 26th April, 2018.
+
+
+
+### Section 3: Representative Actions
+
+
+```{r, echo=FALSE, include=TRUE}
+# Uri for current WA state members of the house
+members_uri <- "/members/house/WA/current.json"
+
+# passing the uri to obtain the member data
+parsed_member_data <- parse_the_data(members_uri)
+
+# Getting the required data frame from the member data
+member_data <- parsed_member_data$results
+
+# filtering the data based on chosen reprensentative ID
+member_data <- filter(member_data, id == representative_id)
+
+# uri for the chosen representative
+member_data_uri <- paste0("/members/", representative_id, ".json")
+
+# passing the chosen representative uri to obtain the representative data
+rep_parsed_data <- parse_the_data(member_data_uri)
+
+# uri for the bills passed by the chosen representative
+rep_bills_uri <- paste0("/members/", representative_id, "/bills/introduced.json")
+
+#passing the uri to obtain the chosen representative's bill data
+bills_results <- parse_the_data(rep_bills_uri)
+
+# Getting the required data frame about the bills passed by this representative
+rep_bills_data <- bills_results$results
+representative_bills_data <- data.frame(rep_bills_data$bills) %>%
+  flatten()
+
+# Representative's contact information
+twitter <- member_data$twitter_id
+facebook <- member_data$facebook_account
+more_info <- member_data$times_topics_url
+name <- paste(member_data$first_name, member_data$last_name)
+party <- member_data$party
+
+print(paste("Name: ", name, sep = "")) 
+print(paste("Party: ", party, sep = ""))
+print(paste("Twitter Info: ", twitter, sep = ""))
+print(paste("Facebook Info: ", facebook, sep = ""))
+print(paste("Find more information on: ", more_info, sep = ""))
+
+```
+
+<p style="text-align: center;">
+
+![Legislator](845_lg.jpg)
+
+</p>
+
+
+
+
+
+```{r, echo=FALSE, include=TRUE}
+# Selecting the required informations to display
+rep_billdata <- select(representative_bills_data, number, title, latest_major_action, govtrack_url)
+
+kable(rep_billdata, format = "markdown")
+```
+
+
+1. **number : ** This column is a unique identifier for each of the bills. The bills begin as *H.R.* and a number depending on the order in which they were introduced.
+
+2. **title : ** This column is the name of the bill.
+
+3. **Last Major Action : ** This column consists the bill’s current status in the legislative branch. It explains both the House’s and the Senate’s reactions to it, and how far it is from being passed. This column also includes the IDs of any texts of measures
+
+4. **govtrack url : ** This column includes the links to where the full script of the bill can be accessed, as well as additional information about it. The links take you to a government tracking website, updating constituents on the bills their representatives are interacting with.
